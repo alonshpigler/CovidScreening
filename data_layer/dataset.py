@@ -5,9 +5,16 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 import numpy as np
-from util.files_operations import load_csv
+from torchvision import transforms
 
-DEFAULT_BASE_PATH = 'C:/Covid-Screening2/data_layer/raw_data'
+from util.files_operations import load_csv
+use_cuda = torch.cuda.is_available()
+print("USE CUDA=" + str(use_cuda))
+FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
+LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
+Tensor = FloatTensor
+
+DEFAULT_BASE_PATH = 'C:/CovidScreening/data_layer/raw_data'
 DEFAULT_METADATA_BASE_PATH = os.path.join(DEFAULT_BASE_PATH, 'metadata')
 DEFAULT_IMAGES_BASE_PATH = os.path.join(DEFAULT_BASE_PATH, 'images')
 # DEFAULT_IMAGE_FRAME_PATH = os.path.join(DEFAULT_IMAGES_BASE_PATH, 'image_frame.csv')
@@ -63,11 +70,33 @@ class CovidMetadata(Dataset):
 
 class CovidDataset(Dataset):
 
-    def __init__(self, inds, target_channel, root_dir=DEFAULT_BASE_PATH, csv_file='metadata.csv'):
+    def __init__(self,
+                 inds,
+                 target_channel,
+                 mean=0,
+                 std=0,
+                 root_dir=DEFAULT_BASE_PATH,
+                 csv_file='metadata.csv'):
 
-        self.csv_file = pd.read_csv(os.path.join(self.root_dir,csv_file)).iloc[inds]
+        self.csv_file = pd.read_csv(os.path.join(root_dir,csv_file)).iloc[inds]
         self.root_dir = root_dir
         self.target_channel = target_channel
+        self.data_shape()
+        self._get_mean_and_std()
+        self.transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,),
+            transforms.RandomCrop(64,64,4))
+        ])
+
+    def _get_mean_and_std(self):
+
+        # calculate_mean
+
+        for id in range(len(self.csv_file):
+            input, _ = self.__getitem__(id)
+
+
 
     def __len__(self):
         return len(self.csv_file)
@@ -86,12 +115,11 @@ class CovidDataset(Dataset):
         data = np.ndarray(shape=(1024, 1024, n_channels), dtype=dtype)
 
         for ix, img_path in enumerate(image_paths):
-            data[:, :, ix] = cv2.imread(img_path)
+            data[:, :, ix] = cv2.imread(img_path, flags=cv2.IMREAD_GRAYSCALE)
 
-        return data
+        return FloatTensor(data)
 
     def image_path(self,
-                   dataset,
                    experiment,
                    plate,
                    address,
@@ -120,11 +148,10 @@ class CovidDataset(Dataset):
         -------
         str the path of image
         """
-        return os.path.join(base_path, dataset, experiment, "Plate{}".format(plate),
+        return os.path.join(base_path, experiment, "Plate{}".format(plate),
                             "{}_s{}_w{}.png".format(address, site, channel))
 
     def load_site(self,
-                  dataset,
                   experiment,
                   plate,
                   well,
@@ -158,10 +185,10 @@ class CovidDataset(Dataset):
         input_channels = list(DEFAULT_CHANNELS)
         input_channels.remove(target_channel)
 
-        target_path = self.image_path(dataset, experiment, plate, well, site, target_channel, base_path=base_path)
+        target_path = [self.image_path(experiment, plate, well, site, target_channel, base_path=base_path)]
         input_paths = [
-            self.image_path(dataset, experiment, plate, well, site, c, base_path=base_path)
-            for c in channels
+            self.image_path(experiment, plate, well, site, c, base_path=base_path)
+            for c in input_channels
         ]
         return self.load_images_as_tensor(input_paths), self.load_images_as_tensor(target_path)
 

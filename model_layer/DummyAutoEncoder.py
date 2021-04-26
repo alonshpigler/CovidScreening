@@ -1,5 +1,6 @@
 import pytorch_lightning as pl
 import torch
+import torch.nn.functional as F
 from torch import nn
 
 class LitAutoEncoder(pl.LightningModule):
@@ -7,14 +8,14 @@ class LitAutoEncoder(pl.LightningModule):
     def __init__(self):
         super().__init__()
         self.encoder = nn.Sequential(
-            nn.Linear(28*28, 64),
+            nn.Linear(1024*1024*4, 64),
             nn.ReLU(),
             nn.Linear(64, 3)
         )
         self.decoder = nn.Sequential(
             nn.Linear(3, 64),
             nn.ReLU(),
-            nn.Linear(64, 28*28)
+            nn.Linear(64, 1024*1024)
         )
 
     def forward(self, x):
@@ -29,7 +30,8 @@ class LitAutoEncoder(pl.LightningModule):
         x = x.view(x.size(0), -1)
         z = self.encoder(x)
         x_hat = self.decoder(z)
-        loss = F.mse_loss(x_hat, x)
+        y = y.view(y.size(0), -1)
+        loss = F.mse_loss(x_hat, y)
         # Logging to TensorBoard by default
         self.log('train_loss', loss)
         return loss

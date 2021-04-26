@@ -23,13 +23,14 @@ def load_data(args):
     plates = [1, 25]
     train_plates = [25]
     test_plates = [1]
+    experiment = 1
     # TODO - implement drawing plates random split
     # modes = ['train', 'test']
 
     # mock_train =
     df = pd.read_csv(args.metadata_path)
 
-    partitions = split_by_plates(df, args.plates_split['train'],args.plates_split['test'])
+    partitions = split_by_plates(df, experiment, args.plates_split[0],args.plates_split[1])
     partitions['train'], partitions['val'] = train_test_split(np.asarray(partitions['train']), train_size=args.split_ratio,
                                                             shuffle=True)
 
@@ -39,18 +40,20 @@ def load_data(args):
     return dataloaders
 
 
-def split_by_plates(df, train_plates, test_plates) -> dict:
+def split_by_plates(df, experiment, train_plates, test_plates) -> dict:
     partitions = {
-        'train': list(df[(df['plate'].isin(train_plates)) & (df['disease_condition'] == 'Mock')].index),
+        'train': list(df[(df['plate'].isin(train_plates)) & (df['disease_condition'] == 'Mock') & (df['experiment']==('HRCE-'+str(experiment)))].index),
         # 'mock_test': list(df[(df['plate'].isin(test_plates)) & (df['disease_condition'] == 'Mock')].index),
         'test': {
             'mock': {},
-            'irradiated_from_train_plates': list(
-                df[(df['plate'].isin(train_plates)) & (df['disease_condition'] == 'UV Inactivated SARS-CoV-2')].index),
+            # 'irradiated_from_train_plates': list(
+            #     df[(df['plate'].isin(train_plates)) & (df['disease_condition'] == 'UV Inactivated SARS-CoV-2')].index),
+            'irradiated_from_train_plates':{},
             # 'irradiated_test_plate': list(df[(df['plate'].isin(test_plates)) & (df['disease_condition'] == 'UV Inactivated SARS-CoV-2')].index),
             'irradiated_from_test_plates': {},
-            'active_from_train_plates': list(
-                df[(df['plate'].isin(train_plates)) & (df['disease_condition'] == 'Active SARS-CoV-2')].index),
+            'active_from_train_plates':{},
+            # 'active_from_train_plates': list(
+            #     df[(df['plate'].isin(train_plates)) & (df['disease_condition'] == 'Active SARS-CoV-2')].index),
             # 'active_test_plate': list(df[(df['plate'].isin(train_plates)) & (df['disease_condition'] == 'Active SARS-CoV-2')].index)
             'active_from_test_plates': {}
         }
@@ -58,17 +61,18 @@ def split_by_plates(df, train_plates, test_plates) -> dict:
     # divide test data into plates (irradiated and active from train plates)
     for plate in train_plates:
         partitions['test']['irradiated_from_train_plates'][str(plate)] = list(
-            df[(df['plate'] == plate) & (df['disease_condition'] == 'UV Inactivated SARS-CoV-2')].index),
+            df[(df['plate'] == plate) & (df['disease_condition'] == 'UV Inactivated SARS-CoV-2') & (df['experiment']==('HRCE-'+str(experiment)))].index)
         partitions['test']['active_from_train_plates'][str(plate)] = list(
-            df[(df['plate'] == plate) & (df['disease_condition'] == 'Active SARS-CoV-2')].index)
+            df[(df['plate'] == plate) & (df['disease_condition'] == 'Active SARS-CoV-2') & (df['experiment']==('HRCE-'+str(experiment)))].index)
+
     # divide test data into plates (mock, irradiated and active from test plates)
     for plate in test_plates:
         partitions['test']['mock'][str(plate)] = list(
-            df[(df['plate'] == plate) & (df['disease_condition'] == 'Mock')].index)
+            df[(df['plate'] == plate) & (df['disease_condition'] == 'Mock') & (df['experiment']==('HRCE-'+str(experiment)))].index)
         partitions['test']['irradiated_from_test_plates'][str(plate)] = list(
-            df[(df['plate'] == plate) & (df['disease_condition'] == 'UV Inactivated SARS-CoV-2')].index),
+            df[(df['plate'] == plate) & (df['disease_condition'] == 'UV Inactivated SARS-CoV-2') & (df['experiment']==('HRCE-'+str(experiment)))].index),
         partitions['test']['active_from_test_plates'][str(plate)] = list(
-            df[(df['plate'] == plate) & (df['disease_condition'] == 'Active SARS-CoV-2')].index)
+            df[(df['plate'] == plate) & (df['disease_condition'] == 'Active SARS-CoV-2') & (df['experiment']==('HRCE-'+str(experiment)))].index)
     return partitions
 
 
@@ -79,6 +83,7 @@ def create_datasets(partitions, target_channel):
         'test': {}
     }
     for key in list(partitions['test'].keys()):
+        datasets['test'][key] = {}
         for plate in partitions['test'][key].keys():
             datasets['test'][key][plate] = \
                 CovidDataset(partitions['test'][key][plate], target_channel)
@@ -94,8 +99,9 @@ def create_dataloaders(datasets, partitions, batch_size) -> dict:
         'test': {}
     }
     for key in list(partitions['test'].keys()):
+        dataloaders['test'][key] = {}
         for plate in partitions['test'][key].keys():
             dataloaders['test'][key][plate] = \
-                DataLoader(datasets[key][plate], batch_size=batch_size,
+                DataLoader(datasets['test'][key][plate], batch_size=batch_size,
                                                          shuffle=False)
     return dataloaders
