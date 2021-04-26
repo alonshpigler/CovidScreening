@@ -1,0 +1,3 @@
+data_layer/raw_data/**
+.idea/**
+**/__pycache__/**
