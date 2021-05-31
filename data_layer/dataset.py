@@ -1,23 +1,28 @@
 import os
 
+from PIL import Image
+import pytorch_lightning as pl
 import cv2
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
 import numpy as np
+import config
 from torchvision import transforms
 
+from data_layer.util import dict_fields_to_str
 from util.files_operations import load_csv
+from visuals.util import show_input_and_target
+
 use_cuda = torch.cuda.is_available()
 print("USE CUDA=" + str(use_cuda))
 FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
 Tensor = FloatTensor
 
-DEFAULT_BASE_PATH = 'C:/CovidScreening/data_layer/raw_data'
-DEFAULT_METADATA_BASE_PATH = os.path.join(DEFAULT_BASE_PATH, 'metadata')
-DEFAULT_IMAGES_BASE_PATH = os.path.join(DEFAULT_BASE_PATH, 'images')
-# DEFAULT_IMAGE_FRAME_PATH = os.path.join(DEFAULT_IMAGES_BASE_PATH, 'image_frame.csv')
+
+DATA_DIR, METADATA_PATH, _ ,IMAGES_PATH, _ = config.get_paths()
+
 DEFAULT_CHANNELS = (1, 2, 3, 4, 5)
 
 RGB_MAP = {
@@ -50,18 +55,28 @@ RGB_MAP = {
 
 class CovidMetadata(Dataset):
 
-    def __init__(self, path):
+    def __init__(self,
+                 root_dir=DATA_DIR,
+                 csv_file='metadata.csv',):
 
-        self.metadata = pd.read_csv("C:\\Covid-Screening\\data_layer\\raw_data\\metadata.csv")
+        self.metadata = pd.read_csv(os.path.join(root_dir,csv_file))
         # self.metadata = load_csv(path)
+
+    def get_inds_by(self, plates:list, field:str, value:str, experiment ='HRCE-1'):
+        """
+            :param plates: list containing the plate numbers
+            :param field: The field the inds are gathered by. options:{'disease_condition','treatment'
+            :return: Value: The desired value in the field the inds to be gathered by
+            """
+        return list(self.metadata[(self.metadata['plate'].isin(plates)) & (self.metadata[field] == value)& (self.metadata['experiment'] == experiment)].index)
 
     def __len__(self):
         return len(self.metadata)
 
     def __getitem__(self, idx):
-        img_name = os.path.join(self.metadata, self.image_frame.ix[id, 0])
-        image = cv2.imread(img_name)
-        return image
+        # img_name = os.path.join(self.metadata, self.image_frame.ix[id, 0])
+        # image = cv2.imread(img_name)
+        return self.metadata[idx]
 
     def get_ids_by_type(self, field, value):
 
@@ -73,41 +88,79 @@ class CovidDataset(Dataset):
     def __init__(self,
                  inds,
                  target_channel,
-                 mean=0,
-                 std=0,
-                 root_dir=DEFAULT_BASE_PATH,
-                 csv_file='metadata.csv'):
+                 transform = None,
+                 root_dir=DATA_DIR,
+                 csv_file='metadata.csv',
+                 for_data_statistics_calc = False,
+                 is_test = False):
 
+        super(Dataset).__init__()
         self.csv_file = pd.read_csv(os.path.join(root_dir,csv_file)).iloc[inds]
         self.root_dir = root_dir
         self.target_channel = target_channel
-        self.data_shape()
-        self._get_mean_and_std()
-        self.transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,),
-            transforms.RandomCrop(64,64,4))
-        ])
+        self.transform = transform
 
-    def _get_mean_and_std(self):
-
-        # calculate_mean
-
-        for id in range(len(self.csv_file):
-            input, _ = self.__getitem__(id)
-
-
+        rec = self.csv_file.iloc[0]
+        sample = self.load_site(rec['experiment'], rec['plate'], rec['well'], rec['site'])
+        self.im_shape = sample.shape
+        self.for_data_statistics_calc = for_data_statistics_calc
+        self.is_test = is_test
 
     def __len__(self):
         return len(self.csv_file)
 
-    def __getitem__(self, id):
+    def __getitem__(self, id, show_sample = False):
         # rec =
         rec = self.csv_file.iloc[id]
-        input, target = self.load_site(rec['experiment'], rec['plate'], rec['well'], rec['site'],self.target_channel)
+
+        # if self.target_channel is not None:
+        #     input, target = self.load_site(rec['experiment'], rec['plate'], rec['well'], rec['site'],self.target_channel)
+        #     if self.transform:
+        #         self.transform(input), target
+        #     return input, target
+        # else:
+        input = self.load_site(rec['experiment'], rec['plate'], rec['well'], rec['site'])
+        if not self.for_data_statistics_calc:
+            if show_sample:
+                trans_input = np.zeros((input.shape[2],input.shape[0],input.shape[1]))
+                for i in range(5):
+                    trans_input[i,:,:] = input[:,:,i]
+                show_input_and_target(trans_input, title='before transforms')
+            if self.transform:
+                input = self.transform(input)
+                if show_sample:
+                    show_input_and_target(input, title='after transforms')
+            input, target = self.split_target_from_tensor(input, show_sample)
+            if self.is_test:
+                # rec = dict_fields_to_str(rec.to_frame().to_dict()[rec.name])
+                return input, target, id
+            else:
+                return input, target
+        else:
+
+            return input
+
         # image = cv2.imread(img_name)
 
-        return input, target
+    def split_target_from_tensor(self, input, show_sample = False):
+
+        num_channels = input.shape[0]
+
+        if self.target_channel == 1:
+
+            target, input = torch.split(input,[1,num_channels-1])
+        elif self.target_channel == num_channels:
+            input, target = torch.split(input, [num_channels - 1,1])
+        else:
+            after = num_channels - self.target_channel
+            before = num_channels - after - 1
+            a,target,c = torch.split(input, [before, 1,after])
+            input = torch.cat((a,c),dim=0)
+
+        if show_sample:
+            show_input_and_target(input.detach().numpy(), target.detach().numpy(),title='after split to train and target')
+
+        return input,target
 
     def load_images_as_tensor(self, image_paths, dtype=np.uint8):
 
@@ -117,7 +170,7 @@ class CovidDataset(Dataset):
         for ix, img_path in enumerate(image_paths):
             data[:, :, ix] = cv2.imread(img_path, flags=cv2.IMREAD_GRAYSCALE)
 
-        return FloatTensor(data)
+        return data
 
     def image_path(self,
                    experiment,
@@ -125,7 +178,7 @@ class CovidDataset(Dataset):
                    address,
                    site,
                    channel,
-                   base_path=DEFAULT_IMAGES_BASE_PATH):
+                   base_path=IMAGES_PATH):
         """
         Returns the path of a channel image.
         Parameters
@@ -156,9 +209,9 @@ class CovidDataset(Dataset):
                   plate,
                   well,
                   site,
-                  target_channel,
-                  channels=DEFAULT_CHANNELS,
-                  base_path=DEFAULT_IMAGES_BASE_PATH):
+                  # target_channel=None,
+                  # channels=DEFAULT_CHANNELS,
+                  base_path=IMAGES_PATH):
         """
         Returns the image data of a site
         Parameters
@@ -183,14 +236,24 @@ class CovidDataset(Dataset):
         """
 
         input_channels = list(DEFAULT_CHANNELS)
-        input_channels.remove(target_channel)
 
-        target_path = [self.image_path(experiment, plate, well, site, target_channel, base_path=base_path)]
+        # if target_channel is not None:
+        #
+        #     input_channels.remove(target_channel)
+        #
+        #     target_path = [self.image_path(experiment, plate, well, site, target_channel, base_path=base_path)]
+        #     input_paths = [
+        #         self.image_path(experiment, plate, well, site, c, base_path=base_path)
+        #         for c in input_channels
+        #     ]
+        #     return self.load_images_as_tensor(input_paths), self.load_images_as_tensor(target_path)
+        # else:
         input_paths = [
             self.image_path(experiment, plate, well, site, c, base_path=base_path)
             for c in input_channels
         ]
-        return self.load_images_as_tensor(input_paths), self.load_images_as_tensor(target_path)
+        return self.load_images_as_tensor(input_paths)
+
 
     def convert_tensor_to_rgb(t, channels=DEFAULT_CHANNELS, vmax=255, rgb_map=RGB_MAP):
         """

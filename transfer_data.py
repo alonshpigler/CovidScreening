@@ -12,7 +12,9 @@ from references.configuration.config import Config
 from util.files_operations import *
 # from data_layer.dataset import CovidMetadata
 
-DEFAULT_BASE_PATH = 'C:/Covid-Screening/data_layer/raw_data'
+# DEFAULT_BASE_PATH = 'C:/Covid-Screening/data_layer/raw_data'
+DEFAULT_BASE_PATH = os.pathPath(__file__).parent
+
 DEFAULT_METADATA_BASE_PATH = os.path.join(DEFAULT_BASE_PATH, 'metadata.csv')
 # DEFAULT_IMAGES_BASE_PATH = os.path.join(DEFAULT_BASE_PATH, 'images')
 # DEFAULT_CHANNELS = (1, 2, 3, 4, 5)
@@ -47,12 +49,13 @@ image_frame['img_filename'] = img_filenames
 image_frame.to_csv(image_frame, os.path.join(DEFAULT_BASE_PATH, 'image_frame'), columns=None, index=None)
 write_dict_to_csv_with_pandas(image_frame, os.path.join(DEFAULT_BASE_PATH, 'image_frame.csv'))
 
-# filename = "D:\\RxRx19a-images.zip"
-# with ZipFile(filename) as archive:
-#     for entry in archive.infolist():
-#         with archive.open(entry) as file:
-#             if file.name.__contains__( 'HRCE'):
-#
-#             # last_sep = file.name.rindex('/')
-#                 img = Image.open(file)
-#                 print(img.size, img.mode, len(img.getdata()))
+filename = "D:\\RxRx19a-images.zip"
+with ZipFile(filename) as archive:
+    for entry in archive.infolist():
+        with archive.open(entry) as file:
+            if file.name.__contains__( 'HRCE'):
+
+            # last_sep = file.name.rindex('/')
+                img = Image.open(file)
+                print(img.size, img.mode, len(img.getdata()))
+

@@ -3,131 +3,147 @@ import pickle
 import random
 import sys
 import time
+import scipy
+import pandas as pd
 from argparse import ArgumentParser
 import numpy as np
 import os
-from pathlib import Path
-
+import time
 import torch
 import pytorch_lightning as pl
+from pytorch_lightning.loggers import TensorBoardLogger
+import config
 from data_layer.dataset import CovidDataset
 from data_layer.prepare_data import load_data
 from model_layer.DummyAutoEncoder import LitAutoEncoder
+from model_layer.UNET import Unet
+from tqdm import tqdm
+import matplotlib.pyplot as plt
 
-print('__Python VERSION:', sys.version)
-print('__pyTorch VERSION:', torch.__version__)
-print('__CUDA VERSION')
-print('__CUDNN VERSION:', torch.backends.cudnn.version())
-print('__Number CUDA Devices:', torch.cuda.device_count())
-print('__Devices')
-# call(["nvidia-smi", "--format=csv", "--query-gpu=index,name,driver_version,memory.total,memory.used,memory.free"])
-# print('Active CUDA Device: GPU', torch.cuda.current_device())
-# print('Available devices ', torch.cuda.device_count())
-# print('Current cuda device ', torch.cuda.current_device())
-use_cuda = torch.cuda.is_available()
-print("USE CUDA=" + str(use_cuda))
-FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
-LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
-Tensor = FloatTensor
-
-def parse_args():
-
-    parser = ArgumentParser()
-    parser.add_argument('-m','--mode', type = str,  choices=('train', 'val', 'predict'))
-    ROOT_DIR = Path(__file__).parent
-    data_dir = f"{ROOT_DIR}\\data_layer\\raw_data\\"
-    parser.add_argument('--data_path', type=Path, default=os.path.join(data_dir,'images\\'),
-                        help='path to the data root. It assumes format like in Kaggle with unpacked archives')
-    parser.add_argument('--metadata_path', type=Path, default=os.path.join(data_dir,'metadata.csv'),
-            help='path to the data root. It assumes format like in Kaggle with unpacked archives')
-    parser.add_argument('--plates_split', type=list, default=[[1],[25]],
-                        help='plates split between train and test. left is train and right is test')
-    parser.add_argument('--split-ratio', type=int, default=0.8,
-                        help='split ratio between train and validation. value in [0,1]')
-
-    parser.add_argument('--data-split-seed', type=int, default=0,
-            help='seed for splitting experiments for folds')
-    parser.add_argument('--num-data-workers', type=int, default=4,
-            help='number of data loader workers')
-    parser.add_argument('--device',type=str, default=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
-                        help='device for running code')
-    parser.add_argument('--seed', type=int,
-            help='global seed (for weight initialization, data sampling, etc.). '
-                 'If not specified it will be randomized (and printed on the log)')
-
-    parser.add_argument('--target_channel', type=int, default=5, choices=(1,2,3,4,5),
-                        help='the channel predicted by the network')
-    parser.add_argument('-b', '--batch_size', type=int, default=24)
-    parser.add_argument('--gradient-accumulation', type=int, default=2,
-            help='number of iterations for gradient accumulation')
-    parser.add_argument('-e', '--epochs', type=int, default=90)
-    parser.add_argument('-l', '--lr', type=float, default=1.5e-4)
-
-    args = parser.parse_args()
-
-    # if args.mode == 'train':
-    #     assert args.save is not None
-    # if args.mode == 'val':
-    #     assert args.save is None
-    # if args.mode == 'predict':
-    #     assert args.load is not None
-    #     assert args.save is None
-
-    if args.seed is None:
-        args.seed = random.randint(0, 10 ** 9)
-
-    return args
+from process_images import process_image
+from util.files_operations import write_dict_to_csv_with_pandas, save_to_pickle, load_pickle
+from visuals.util import show_input_and_target
 
 
-def setup_logging(args):
-    head = '{asctime}:{levelname}: {message}'
-    handlers = [logging.StreamHandler(sys.stderr)]
-    # if args.mode == 'train':
-    #     handlers.append(logging.FileHandler(args.save + '.log', mode='w'))
-    # if args.mode == 'predict':
-    #     handlers.append(logging.FileHandler(args.load + '.output.log', mode='w'))
-    logging.basicConfig(level=logging.DEBUG, format=head, style='{', handlers=handlers)
-    logging.info('Start with arguments {}'.format(args))
+def test_by_partition(model, test_dataloaders,input_size,exp_dir=None):
+
+    res = {}
+    res = pd.DataFrame()
+    for plate in list(test_dataloaders):
+        # res[plate] = {}
+        for key in test_dataloaders[plate].keys():
+            # res[plate][key] = []
+            set_name = 'plate ' + plate + ', population ' + key
+            plate_res = test(model, test_dataloaders[plate][key], input_size, set_name,exp_dir)
+            # res[plate][key].append(results)
+            res = pd.concat([res,plate_res])
+    return res
 
 
-def setup_determinism(args):
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
-    random.seed(args.seed)
+def test(model, data_loader, input_size, title ='', save_dir=''):
+    start=0
+    results = pd.DataFrame(columns=['experiment','plate','well','site','disease_condition', 'treatment_conc','pcc'])
+    # results = {}
+    pccs=[]
+    for i, (input, target,ind) in tqdm(enumerate(data_loader),total=len(data_loader)):
+
+        # deformation to patches and reconstruction based on https://discuss.pytorch.org/t/creating-nonoverlapping-patches-from-3d-data-and-reshape-them-back-to-the-image/51210/6
+        rec = data_loader.dataset.csv_file.iloc[ind]
+        pred = process_image(model, input, input_size)
+        pcc, p_value = scipy.stats.pearsonr(pred.flatten(), target.cpu().detach().numpy().flatten())
+        results = results.append(rec, ignore_index=True)
+        results.pcc[start] = pcc
+        # pccs.append(pcc)
+
+        if start == 0:
+            show_input_and_target(input.cpu().detach().numpy().squeeze(), target.cpu().detach().numpy().squeeze(), pred, title, save_dir)
+        start += 1
+
+    # results['pcc'] = pccs
+
+    return results
+
+
+def analyze_results(res):
+    pass
+    # inter_plate_zfactor(res)
+    # for plate in res:
+    # z_factor()
 
 
 def main(args):
-
+    logging.info('Preparing data...')
     dataloaders = load_data(args)
-    autoencoder = LitAutoEncoder()
-    autoencoder.to(args.device)
-    trainer = pl.Trainer(max_epochs=3,progress_bar_refresh_rate=20)
-    trainer.fit(autoencoder, dataloaders['train'], dataloaders['val'])
+    logging.info('Preparing data finished.')
 
+    model = Unet(**args.model_args)
+    args.checkpoint = config.get_checkpoint(args.log_dir, args.target_channel)
+    if args.mode == 'predict' and args.checkpoint is not None:
+        logging.info('loading model from file...')
+        model = model.load_from_checkpoint(args.checkpoint)
+        model.to(args.device)
+        logging.info('loading model from file finished')
 
-    trainer.test(autoencoder, dataloaders['test'])
-    # sets =
+    else:
+        logging.info('training model...')
+        model = Unet(**args.model_args)
+        # model = Unet(args)
+        model.to(args.device)
+        logger = TensorBoardLogger(args.log_dir, name="UNET on channel" + str(args.target_channel))
+        if args.DEBUG:
+            trainer = pl.Trainer(max_epochs=args.epochs, progress_bar_refresh_rate=1, logger=logger,
+                                gpus=1)
+        else:
+            trainer = pl.Trainer(max_epochs=args.epochs, progress_bar_refresh_rate=1, logger=logger,gpus=1)
+        trainer.fit(model, dataloaders['train'], dataloaders['val'])
+        logging.info('training model finished.')
 
+    if args.mode == 'analyze':
+        logging.info('loading predictions from file...')
+        res = load_pickle(os.path.join(args.exp_dir, 'results.pkl'))
+        logging.info('loading predictions from file finished')
 
-    # model = ModelAndLoss(args)
-    # logging.info('Model:\n{}'.format(str(model)))
+    else:
+        logging.info('testing model...')
+        if not args.DEBUG:
+            res_on_val = test(model, dataloaders['val_for_test'], args.input_size, 'validation_set',args.exp_dir)
+        res = test_by_partition(model, dataloaders['test'], args.input_size,args.exp_dir)
+        # res.update(res_on_val)
+        logging.info('testing model finished...')
+        save_to_pickle(res, os.path.join(args.exp_dir, 'results.pkl'))
+        save_to_pickle(args, os.path.join(args.exp_dir, 'args.pkl'))
+        res.to_csv(os.path.join(args.exp_dir, 'results.csv'))
 
-    # if args.load is not None:
-    #     logging.info('Loading model from {}'.format(args.load))
-    #     model.load_state_dict(torch.load(str(args.load)))
-    #
-    # if args.mode in ['train', 'val']:
-    #     train(args, model)
-    # elif args.mode == 'predict':
-    #     predict(args, model)
-    # else:
-    #     assert 0
+    # summerized_res = analyze_results(res)
+    # write_dict_to_csv_with_pandas(summerized_res, os.path.join(args.exp_dir, 'results.csv'))
+
+    # analyze_results(res)
+    # res = {}
+    # for key in list(dataloaders['test']):
+    #     res[key] = {}
+    #     for plate in dataloaders['test'][key].keys():
+    #         res[key][plate] = trainer.test(autoencoder, dataloaders['test'][key][plate])
+
 
 if __name__ == '__main__':
+    exp_num = 1  # if None, new experiment directory is created with the next avaialible number
+    channels_to_predict = [1,2,3,4,5]
+    for target_channel in channels_to_predict:
 
-    args = parse_args()
-    setup_logging(args)
-    setup_determinism(args)
-    main(args)
+        # torch.cuda.empty_cache()
+        args = config.parse_args(exp_num,target_channel)
+
+        args.mode = 'train'
+        args.plates_split = [[1, 2, 3, 4, 5], [25]]
+        args.DEBUG = False
+
+        if args.DEBUG:
+            args.test_samples_per_plate = 5
+            # args.save_dir = True
+            # args.epochs = 5
+        args.test_samples_per_plate = 50
+        args.batch_size = 24
+        args.input_size = 256
+
+        main(args)
+
