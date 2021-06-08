@@ -26,11 +26,11 @@ LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
 Tensor = FloatTensor
 
 
-def parse_args(exp_num=None,target_channel=1):
+def parse_args(exp_num=None,target_channel=1, model_type='UNET4TO1', description='Learning 4to1 mappings'):
 
-    parser = ArgumentParser()
+    parser = ArgumentParser(description=description)
     parser.add_argument('-m','--mode', type = str,  choices=('train', 'val', 'predict'))
-    DATA_DIR, METADATA_PATH, LOG_DIR, IMAGES_PATH, EXP_DIR = get_paths(exp_num,target_channel)
+    DATA_DIR, METADATA_PATH, LOG_DIR, IMAGES_PATH, EXP_DIR = get_paths(exp_num, model_type, target_channel)
 
     parser.add_argument('--data_path', type=Path, default=os.path.join(DATA_DIR,'images\\'),
                         help='path to the data root. It assumes format like in Kaggle with unpacked archives')
@@ -60,14 +60,17 @@ def parse_args(exp_num=None,target_channel=1):
 
     parser.add_argument('-c','--target_channel', type=int, default=target_channel, choices=(1,2,3,4,5),
                         help='the channel predicted by the network')
+    parser.add_argument('--num_input_channels', type=int, default=4, choices = (1,4,5),
+                        help='defines what autoencoder is trained (4to1, 1to1, 5to5)')
     parser.add_argument('-i', '--input_size', type=int, default=256,
                         help='width and hight input into the network')
+
     parser.add_argument('-b', '--batch_size', type=int, default=12)
     parser.add_argument('--gradient-accumulation', type=int, default=2,
             help='number of iterations for gradient accumulation')
-    parser.add_argument('-e', '--epochs', type=int, default=25)
+    parser.add_argument('-e', '--epochs', type=int, default=20)
     parser.add_argument('-l', '--lr', type=float, default=1.5e-4)
-    parser.add_argument('-minimize_net_factor', type=int, default=2,
+    parser.add_argument('-minimize_net_factor', type=int, default=4,
                         help='reduces the network number of convolution maps by a factor')
 
     parser.add_argument('--checkpoint', type=str,
@@ -75,7 +78,8 @@ def parse_args(exp_num=None,target_channel=1):
                         help='path to load existing model from')
 
     args = parser.parse_args()
-    args.model_args = {'lr': args.lr, 'n_classes': 1, 'input_size': args.input_size,'minimize_net_factor': args.minimize_net_factor}
+
+    # args.model_args = {'lr': args.lr, 'n_classes': n_classes, 'input_size': args.input_size,'minimize_net_factor': args.minimize_net_factor}
     # if args.mode == 'train':
     #     assert args.save is not None
     # if args.mode == 'val':
@@ -93,7 +97,7 @@ def parse_args(exp_num=None,target_channel=1):
     return args
 
 
-def get_paths(exp_num=None,target_channel=1):
+def get_paths(exp_num=None, model_type = 'UNET4TO1', target_channel=1):
 
     if use_cuda:
         ROOT_DIR = f"{Path(__file__).parent.parent.parent.parent}home/alonshp"
@@ -103,12 +107,12 @@ def get_paths(exp_num=None,target_channel=1):
     DATA_DIR = f"{ROOT_DIR}/Data"
     LOG_DIR = f"{ROOT_DIR}/log_dir"
     EXP_DIR = f"{ROOT_DIR}/exp_dir"
-    if exp_num is None:
-        exp_num = get_exp_num(EXP_DIR)
-    EXP_DIR = os.path.join(EXP_DIR, str(exp_num), "channel " + str(target_channel))
+    # if exp_num is None:
+    #     exp_num = get_exp_num(EXP_DIR)
+    EXP_DIR = os.path.join(EXP_DIR, str(exp_num),model_type, "channel " + str(target_channel))
     # exp_num = get_exp_num(EXP_DIR)
-
-    make_folder(EXP_DIR)
+    if exp_num is not None:
+        make_folder(EXP_DIR)
     METADATA_PATH = os.path.join(DATA_DIR, 'metadata.csv')
     IMAGES_PATH = os.path.join(DATA_DIR, 'images')
 
@@ -134,21 +138,25 @@ def setup_determinism(args):
     random.seed(args.seed)
 
 
-def get_checkpoint(LOG_DIR, target_channel):
-
-    if target_channel == 1:
-        checkpoint = f"{LOG_DIR}/UNET on channel1/version_2/checkpoints/epoch=16-step=458.ckpt"
-    elif target_channel == 2:
-        checkpoint = f"{LOG_DIR}/UNET on channel2/version_0/checkpoints/epoch=11-step=323.ckpt"
-    #     checkpoint = f"{LOG_DIR}/lightning_logs/version_83/checkpoints/epoch=16-step=186.ckpt"
-    elif target_channel == 4:
-        checkpoint =f"{LOG_DIR}/UNET on channel4/version_7/checkpoints/epoch=35-step=971.ckpt"
-    elif target_channel == 5:
-        checkpoint = f"{LOG_DIR}/UNET on channel5/version_1/checkpoints/epoch=32-step=890.ckpt"
-    else:
+def get_checkpoint(LOG_DIR, model_name, target_channel):
+    if model_name == 'UNET4TO1':
+        if target_channel == 1:
+            checkpoint = f"{LOG_DIR}/UNET on channel1/version_2/checkpoints/epoch=16-step=458.ckpt"
+        elif target_channel == 2:
+            checkpoint = f"{LOG_DIR}/UNET on channel2/version_0/checkpoints/epoch=11-step=323.ckpt"
+        #     checkpoint = f"{LOG_DIR}/lightning_logs/version_83/checkpoints/epoch=16-step=186.ckpt"
+        elif target_channel == 4:
+            checkpoint =f"{LOG_DIR}/UNET on channel4/version_7/checkpoints/epoch=35-step=971.ckpt"
+        elif target_channel == 5:
+            checkpoint = f"{LOG_DIR}/UNET on channel5/version_1/checkpoints/epoch=32-step=890.ckpt"
+        else:
+            checkpoint = None
+            # raise ValueError("No model was trained for this target channel")
+    elif model_name == 'UNET5TO5':
+        if target_channel == 1:
+            checkpoint = f"{LOG_DIR}/UNET on channel1/version_16/checkpoints/epoch=23-step=431.ckpt"
+    if 'checkpoint' not in locals():
         checkpoint = None
-        # raise ValueError("No model was trained for this target channel")
-
     return checkpoint
 
 
@@ -156,10 +164,10 @@ def get_device():
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def get_exp_num(EXP_DIR):
-    num=0
-    exp_name = os.path.join(EXP_DIR,str(num))
-    while is_folder_exist(exp_name):
-        num+=1
-        exp_name = os.path.join(EXP_DIR, str(num))
-    return num
+# def get_exp_num(EXP_DIR):
+#     num=0
+#     exp_name = os.path.join(EXP_DIR,str(num))
+#     while is_folder_exist(exp_name):
+#         num+=1
+#         exp_name = os.path.join(EXP_DIR, str(num))
+#     return num

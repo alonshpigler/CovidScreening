@@ -1,17 +1,12 @@
 import os
 
-from PIL import Image
-import pytorch_lightning as pl
 import cv2
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
 import numpy as np
-import config
-from torchvision import transforms
+from configuration import config
 
-from data_layer.util import dict_fields_to_str
-from util.files_operations import load_csv
 from visuals.util import show_input_and_target
 
 use_cuda = torch.cuda.is_available()
@@ -88,6 +83,7 @@ class CovidDataset(Dataset):
     def __init__(self,
                  inds,
                  target_channel,
+                 input_channels = 4,
                  transform = None,
                  root_dir=DATA_DIR,
                  csv_file='metadata.csv',
@@ -98,6 +94,7 @@ class CovidDataset(Dataset):
         self.csv_file = pd.read_csv(os.path.join(root_dir,csv_file)).iloc[inds]
         self.root_dir = root_dir
         self.target_channel = target_channel
+        self.input_channels = input_channels
         self.transform = transform
 
         rec = self.csv_file.iloc[0]
@@ -130,14 +127,20 @@ class CovidDataset(Dataset):
                 input = self.transform(input)
                 if show_sample:
                     show_input_and_target(input, title='after transforms')
-            input, target = self.split_target_from_tensor(input, show_sample)
+            if self.input_channels == 4:
+                input, target = self.split_target_from_tensor(input, show_sample)
+            elif self.input_channels == 1:
+                input, target = input[self.target_channel-1:self.target_channel,:,:], input[self.target_channel-1:self.target_channel,:,:]
+            elif self.input_channels == 5:
+                target = input
+            else:
+                raise ValueError('Number of input channels is not supported')
             if self.is_test:
                 # rec = dict_fields_to_str(rec.to_frame().to_dict()[rec.name])
                 return input, target, id
             else:
                 return input, target
         else:
-
             return input
 
         # image = cv2.imread(img_name)

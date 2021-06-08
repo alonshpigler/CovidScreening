@@ -9,14 +9,14 @@ class Unet(pl.LightningModule):
 
     # fixed bug for pl loading model_checkpoint according to https://github.com/PyTorchLightning/pytorch-lightning/issues/2909
     def __init__(self, *args,**kwargs):
-        super(Unet,self).__init__()
+        super(Unet, self).__init__()
 
         # self.params = params
         if isinstance(kwargs, dict):
             hparams = Namespace(**kwargs)
         self.hparams = hparams
         self.save_hyperparameters()
-        self.n_channels = 4
+        self.n_channels = hparams.n_input_channels
         self.n_classes = hparams.n_classes
         self.h = hparams.input_size
         self.w = hparams.input_size
@@ -117,7 +117,7 @@ class Unet(pl.LightningModule):
         return torch.optim.Adam(self.parameters(), lr=self.hparams.lr, weight_decay=1e-8)
 
     def configure_callbacks(self):
-        early_stop = EarlyStopping(monitor="val_loss", mode="min",patience=10,verbose=True)
+        early_stop = EarlyStopping(monitor="val_loss", mode="min",patience=6,verbose=True)
         checkpoint = ModelCheckpoint(monitor="val_loss")
         return [early_stop, checkpoint]
     # def __dataloader(self):

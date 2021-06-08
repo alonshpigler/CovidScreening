@@ -1,12 +1,10 @@
 import logging
 
-import pandas as pd
 from sklearn.model_selection import train_test_split
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-import config
 from data_layer import transforms
 
 from data_layer import dataset
@@ -46,7 +44,7 @@ def load_data(args):
     partitions['train'], partitions['val'] = train_test_split(np.asarray(partitions['train']), train_size=args.split_ratio,
                                                             shuffle=True)
 
-    datasets = create_datasets(args.plates_split[0], partitions, args.target_channel, args.input_size,args.device)
+    datasets = create_datasets(args.plates_split[0], partitions, args.target_channel, args.input_size,args.device, args.num_input_channels)
     print_data_statistics(datasets)
     dataloaders = create_dataloaders(datasets, partitions,args.batch_size)
 
@@ -107,7 +105,7 @@ def split_by_plates(df, experiment, train_plates, test_plates, test_samples_per_
 #     """
 #     df[(df['plate'].isin(plates)) & (df['disease_condition'] == 'Active SARS-CoV-2')].index)
 
-def create_datasets(train_plates, partitions, target_channel, input_size, device):
+def create_datasets(train_plates, partitions, target_channel, input_size, device, num_input_channels):
 
     # mean, std = [0.5,0.4,0.3,0.2], [0.1,0.1,0.1,0.1]
     # mean, std = calc_mean_and_std(partitions['train'])
@@ -130,9 +128,9 @@ def create_datasets(train_plates, partitions, target_channel, input_size, device
     )
 
     datasets = {
-        'train': CovidDataset(partitions['train'], target_channel, transform=train_transforms),
-        'val': CovidDataset(partitions['val'], target_channel, transform=train_transforms),
-        'val_for_test':CovidDataset(partitions['val'], target_channel, transform=test_transforms, is_test=True),
+        'train': CovidDataset(partitions['train'], target_channel, transform=train_transforms, input_channels=num_input_channels),
+        'val': CovidDataset(partitions['val'], target_channel, transform=train_transforms, input_channels=num_input_channels),
+        'val_for_test':CovidDataset(partitions['val'], target_channel, transform=test_transforms, is_test=True, input_channels=num_input_channels),
         'test': {}
     }
 
@@ -140,7 +138,7 @@ def create_datasets(train_plates, partitions, target_channel, input_size, device
         datasets['test'][plate] = {}
         for key in partitions['test'][plate].keys():
             datasets['test'][plate][key] = \
-                CovidDataset(partitions['test'][plate][key], target_channel, transform = test_transforms, is_test=True)
+                CovidDataset(partitions['test'][plate][key], target_channel, transform = test_transforms, is_test=True, input_channels=num_input_channels)
 
     print_data_statistics(datasets)
 
