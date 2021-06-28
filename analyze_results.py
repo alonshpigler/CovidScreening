@@ -18,7 +18,7 @@ def analyze_results(res):
 if __name__ == '__main__':
 
     exp_num = 3
-    channels_to_predict = [1]
+    channels_to_predict = [3]
     models = [
         Model_Config.UNET4TO1,
         # Model_Config.UNET1TO1,
@@ -29,7 +29,6 @@ if __name__ == '__main__':
 
             DATA_DIR, METADATA_PATH, _, IMAGES_PATH,EXP_DIR = config.get_paths(exp_num, model.name, target_channel)
             args = load_pickle(os.path.join(EXP_DIR,'args.pkl'))
-
             treatment = 'Remdesivir (GS-5734)'
             res_path = os.path.join(EXP_DIR, 'results.csv')
             df = pd.read_csv(res_path)

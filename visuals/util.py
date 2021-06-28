@@ -11,7 +11,7 @@ def show_input_and_target(input, target=None,pred = None, title='', save_dir=Non
     target_c = 0 if target is None else target.shape[0]
     pred_c = 0 if pred is None else pred.shape[0]
     num_images = input_c + target_c + pred_c
-    images_in_row = 5 if num_images > 8 else 3
+    images_in_row = 5 if num_images > 5 else 2
 
     num_rows, num_cols = ceil(num_images/images_in_row), images_in_row
 

@@ -76,7 +76,7 @@ def main(args, Model):
         # model = Unet(**args.model_args)
         # model = Unet(args)
         model.to(args.device)
-        logger = TensorBoardLogger(args.log_dir, name="UNET on channel" + str(args.target_channel))
+        logger = TensorBoardLogger(args.log_dir, name=Model.name+ " on channel" + str(args.target_channel))
         trainer = pl.Trainer(max_epochs=args.epochs, progress_bar_refresh_rate=1, logger=logger,gpus=1,auto_scale_batch_size='binsearch',weights_summary='full')
         trainer.fit(model, dataloaders['train'], dataloaders['val'])
         logging.info('training model finished.')
@@ -110,25 +110,27 @@ def main(args, Model):
 
 if __name__ == '__main__':
     exp_num = 3  # if None, new experiment directory is created with the next avaialible number
-    description = 'Checking 1 to 1 prediction'
+    description = 'Checking 1to1 prediction on 5'
     DEBUG = False
 
     models = [
-        # Model_Config.UNET4TO1,
-        Model_Config.UNET1TO1,
+        # Model_Config.UNET1TO1,
+        Model_Config.UNET4TO1,
         # Model_Config.UNET5TO5
         ]
+
     print(description)
-    channels_to_predict = [1,2,3,4,5]
+    channels_to_predict = [3]
 
     for model in models:
         for target_channel in channels_to_predict:
 
+            print('Training Model '+ model.name +' with target ' + str(target_channel))
             # torch.cuda.empty_cache()
             args = config.parse_args(exp_num, target_channel, model.name, description=description)
             args.num_input_channels = model.value[2]['n_input_channels']
 
-            args.mode = 'train'
+            args.mode = 'predict'
             args.plates_split = [[1, 2, 3, 4, 5], [25]]
 
             args.test_samples_per_plate = None

@@ -141,22 +141,32 @@ def setup_determinism(args):
 def get_checkpoint(LOG_DIR, model_name, target_channel):
     if model_name == 'UNET4TO1':
         if target_channel == 1:
-            checkpoint = f"{LOG_DIR}/UNET on channel1/version_2/checkpoints/epoch=16-step=458.ckpt"
+            checkpoint = f"{LOG_DIR}/UNET4TO1 on channel1/version_1/checkpoints/epoch=18-step=341.ckpt"
         elif target_channel == 2:
-            checkpoint = f"{LOG_DIR}/UNET on channel2/version_0/checkpoints/epoch=11-step=323.ckpt"
-        #     checkpoint = f"{LOG_DIR}/lightning_logs/version_83/checkpoints/epoch=16-step=186.ckpt"
+            checkpoint = f"{LOG_DIR}/UNET4TO1 on channel2/version_0/checkpoints/epoch=17-step=323.ckpt"
+        elif  target_channel == 3:
+            checkpoint = f"{LOG_DIR}/UNET4TO1 on channel3/version_0/checkpoints/epoch=19-step=359.ckpt"
         elif target_channel == 4:
-            checkpoint =f"{LOG_DIR}/UNET on channel4/version_7/checkpoints/epoch=35-step=971.ckpt"
-        elif target_channel == 5:
-            checkpoint = f"{LOG_DIR}/UNET on channel5/version_1/checkpoints/epoch=32-step=890.ckpt"
-        else:
-            checkpoint = None
-            # raise ValueError("No model was trained for this target channel")
+            checkpoint =f"{LOG_DIR}/UNET4TO1 on channel4/version_0/checkpoints/epoch=16-step=305.ckpt"
+
     elif model_name == 'UNET5TO5':
-        if target_channel == 1:
             checkpoint = f"{LOG_DIR}/UNET on channel1/version_16/checkpoints/epoch=23-step=431.ckpt"
+
+    elif model_name == 'UNET1TO1':
+        if target_channel == 1:
+            checkpoint = f"{LOG_DIR}/UNET on channel1/version_24/checkpoints/epoch=19-step=359.ckpt"
+        if target_channel == 2:
+            checkpoint = f"{LOG_DIR}/UNET1TO1 on channel2/version_2/checkpoints/epoch=15-step=287.ckpt"
+        if target_channel == 3:
+            checkpoint = f"{LOG_DIR}/UNET1TO1 on channel3/version_0/checkpoints/epoch=19-step=359.ckpt"
+        elif target_channel==4:
+            checkpoint = f"{LOG_DIR}/UNET1TO1 on channel4/version_1/checkpoints/epoch=16-step=305.ckpt"
+        elif target_channel == 5:
+            checkpoint = f"{LOG_DIR}/UNET1TO1 on channel5/version_0/checkpoints/epoch=19-step=359.ckpt"
+
     if 'checkpoint' not in locals():
         checkpoint = None
+
     return checkpoint
 
 

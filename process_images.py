@@ -49,7 +49,7 @@ def process_image(model, input, input_size, input_channels):
     # pred_orig = pred_orig.permute(0, 1, 3, 4, 2, 5).contiguous() - important!!
     # pred_orig = pred_orig.permute(0, 1, 3, 4, 2, 5).contiguous()
 
-    pred = pred_orig.view(1, output_c, output_h, output_w).cpu().detach().numpy().squeeze()
+    pred = pred_orig.view(1, output_c, output_h, output_w).cpu().detach().numpy()[0,:,:,:]
 
     # new_pred = pred_orig.permute(0, 1, 2, 3, 4, 5).contiguous()
     # new_pred = new_pred.view(1, 1, output_h, output_w).cpu().detach().numpy().squeeze()
