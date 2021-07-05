@@ -7,7 +7,7 @@ import torch
 import numpy as np
 from pathlib import Path
 
-from util.files_operations import is_folder_exist, make_folder
+from util.files_operations import make_folder
 
 print('__Python VERSION:', sys.version)
 print('__pyTorch VERSION:', torch.__version__)
@@ -26,23 +26,24 @@ LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
 Tensor = FloatTensor
 
 
-def parse_args(exp_num=None,target_channel=1, model_type='UNET4TO1', description='Learning 4to1 mappings'):
+def parse_args(exp_num=None, num_input_channels=4, target_channel=1, model_type='UNET4TO1', debug=False):
 
-    parser = ArgumentParser(description=description)
+    parser = ArgumentParser()
     parser.add_argument('-m','--mode', type = str,  choices=('train', 'val', 'predict'))
     DATA_DIR, METADATA_PATH, LOG_DIR, IMAGES_PATH, EXP_DIR = get_paths(exp_num, model_type, target_channel)
 
     parser.add_argument('--data_path', type=Path, default=os.path.join(DATA_DIR,'images\\'),
                         help='path to the data root. It assumes format like in Kaggle with unpacked archives')
+
     parser.add_argument('--metadata_path', type=Path, default=METADATA_PATH,
             help='path to the data root. It assumes format like in Kaggle with unpacked archives')
     parser.add_argument('--log_dir', type=Path, default=LOG_DIR,
                         help='path to experiment logs.')
     parser.add_argument('--exp_dir', type=Path, default=EXP_DIR,
                         help='path to experiment results.')
-    parser.add_argument('--plates_split', type=list, default=[[1,2,3],[25]],
+    parser.add_argument('--plates_split', type=list, default=[[1, 2, 3, 4, 5], [25]],
                         help='plates split between train and test. left is train and right is test')
-    parser.add_argument('--test_samples_per_plate', type=int, default=None,
+    parser.add_argument('--test_samples_per_plate', type=int, default=-1,
                         help='number of test samples for each plate. if None, all plates are taken')
 
     parser.add_argument('--split-ratio', type=int, default=0.8,
@@ -54,31 +55,31 @@ def parse_args(exp_num=None,target_channel=1, model_type='UNET4TO1', description
             help='number of data loader workers')
     parser.add_argument('--device',type=str, default=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
                         help='device for running code')
-    parser.add_argument('--seed', type=int,
+    parser.add_argument('--seed', type=int, default=100,
             help='global seed (for weight initialization, data sampling, etc.). '
                  'If not specified it will be randomized (and printed on the log)')
 
-    parser.add_argument('-c','--target_channel', type=int, default=target_channel, choices=(1,2,3,4,5),
+    parser.add_argument('--target_channel', type=int, default=target_channel, choices=(1,2,3,4,5),
                         help='the channel predicted by the network')
-    parser.add_argument('--num_input_channels', type=int, default=4, choices = (1,4,5),
+    parser.add_argument('--num_input_channels', type=int, default=num_input_channels, choices = (1,4,5),
                         help='defines what autoencoder is trained (4to1, 1to1, 5to5)')
-    parser.add_argument('-i', '--input_size', type=int, default=256,
+    parser.add_argument('--input_size', type=int, default=128,
                         help='width and hight input into the network')
 
-    parser.add_argument('-b', '--batch_size', type=int, default=12)
-    parser.add_argument('--gradient-accumulation', type=int, default=2,
-            help='number of iterations for gradient accumulation')
-    parser.add_argument('-e', '--epochs', type=int, default=20)
-    parser.add_argument('-l', '--lr', type=float, default=1.5e-4)
-    parser.add_argument('-minimize_net_factor', type=int, default=4,
-                        help='reduces the network number of convolution maps by a factor')
+    parser.add_argument('--batch_size', type=int, default=36)
+    # parser.add_argument('--gradient-accumulation', type=int, default=2,
+    #         help='number of iterations for gradient accumulation')
+    parser.add_argument('--epochs', type=int, default=20)
+    parser.add_argument('--lr', type=float, default=1.5e-4)
+    # parser.add_argument('-minimize_net_factor', type=int, default=4,
+    #                     help='reduces the network number of convolution maps by a factor')
 
     parser.add_argument('--checkpoint', type=str,
                         default='lightning_logs/version_66/checkpoints/epoch=18-step=113.ckpt',
                         help='path to load existing model from')
 
-    args = parser.parse_args()
-
+    # args = parser.parse_known_args()
+    args = parser.parse_known_args()[0]
     # args.model_args = {'lr': args.lr, 'n_classes': n_classes, 'input_size': args.input_size,'minimize_net_factor': args.minimize_net_factor}
     # if args.mode == 'train':
     #     assert args.save is not None
@@ -91,6 +92,10 @@ def parse_args(exp_num=None,target_channel=1, model_type='UNET4TO1', description
     if args.seed is None:
         args.seed = random.randint(0, 10 ** 9)
 
+    if debug:
+        args.test_samples_per_plate = 5
+        args.epochs = 3
+
     setup_logging(args)
     setup_determinism(args)
 
@@ -100,7 +105,7 @@ def parse_args(exp_num=None,target_channel=1, model_type='UNET4TO1', description
 def get_paths(exp_num=None, model_type = 'UNET4TO1', target_channel=1):
 
     if use_cuda:
-        ROOT_DIR = f"{Path(__file__).parent.parent.parent.parent}home/alonshp"
+        ROOT_DIR = f"{Path(__file__).parent.parent.parent.parent}/alonshp"
     else:
         ROOT_DIR = Path(__file__).parent.parent.parent
 
@@ -109,7 +114,8 @@ def get_paths(exp_num=None, model_type = 'UNET4TO1', target_channel=1):
     EXP_DIR = f"{ROOT_DIR}/exp_dir"
     # if exp_num is None:
     #     exp_num = get_exp_num(EXP_DIR)
-    EXP_DIR = os.path.join(EXP_DIR, str(exp_num),model_type, "channel " + str(target_channel))
+    # EXP_DIR = os.path.join(EXP_DIR, str(exp_num),model_type, "channel " + str(target_channel))
+    EXP_DIR = os.path.join(EXP_DIR, str(exp_num), "channel " + str(target_channel))
     # exp_num = get_exp_num(EXP_DIR)
     if exp_num is not None:
         make_folder(EXP_DIR)

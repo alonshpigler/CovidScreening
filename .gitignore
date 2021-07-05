@@ -1,5 +1,5 @@
-data_layer/raw_data/**
-.idea/**
+../data_layer/raw_data/**
+../.idea/vcs.xml
 **/__pycache__/**
 lightning_logs/**
 

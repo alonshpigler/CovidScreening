@@ -6,7 +6,6 @@ lr = 1.5e-4
 epochs = 25
 minimize_net_factor = 4
 
-
 class Model_Config(Enum):
 
     UNET4TO1 = ('unet_4to1', Unet, {'n_input_channels':4, 'n_classes':1, 'input_size':input_size, 'lr': lr, 'epochs': epochs, 'minimize_net_factor': minimize_net_factor})

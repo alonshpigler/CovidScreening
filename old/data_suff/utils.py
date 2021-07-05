@@ -1,14 +1,10 @@
 import os
 
-import numpy as np
 # from skimage.io import imread
 import pandas as pd
 
-from util.files_operations import load_csv
+from util import load_csv
 
-import sys
-from zipfile import ZipFile
-from PIL import Image # $ pip install pillow
 #
 # filename = 'D:\\RxRx19a-images.zip'
 # with ZipFile(filename) as archive:

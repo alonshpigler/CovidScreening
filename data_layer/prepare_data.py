@@ -1,15 +1,14 @@
 import logging
+import pandas as pd
 
 from sklearn.model_selection import train_test_split
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from data_layer import transforms
+from data_layer import transforms, dataset
 
-from data_layer import dataset
 from data_layer.dataset import CovidDataset
-from util.files_operations import *
 
 use_cuda = torch.cuda.is_available()
 FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
@@ -179,7 +178,7 @@ def calc_mean_and_std(inds, num_batches,device):
 
     # num_samples = len(inds)
 
-    train_data = dataset.CovidDataset(inds, target_channel=None,for_data_statistics_calc=True)
+    train_data = dataset.CovidDataset(inds, target_channel=None, for_data_statistics_calc=True)
     batch_size = int(len(train_data)/num_batches)
     train_loader = DataLoader(train_data, batch_size=batch_size)
     num_channels = train_data.im_shape[2]

@@ -8,8 +8,7 @@ from PIL import Image
 from pathlib import Path
 
 from data_layer.util import image_path
-from references.configuration.config import Config
-from util.files_operations import *
+
 # from data_layer.dataset import CovidMetadata
 
 # DEFAULT_BASE_PATH = 'C:/Covid-Screening/data_layer/raw_data'

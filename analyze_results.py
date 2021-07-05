@@ -1,11 +1,12 @@
-import numpy as np
+from pathlib import Path
+
 import os
 import pandas as pd
 from configuration import config
-import matplotlib.pyplot as plt
 
 from configuration.model_config import Model_Config
 from util.files_operations import load_pickle
+from visualize import violin_plot, treatment_plot
 
 
 def analyze_results(res):
@@ -14,11 +15,69 @@ def analyze_results(res):
     # for plate in res:
     # z_factor()
 
+# def load_populations_by(parameter, values, EXP_DIR, test_plate = 25, inspected_treatments=['Remdesivir (GS-5734)'], experiment='HRCE-1'):
+#
+#     args = load_pickle(os.path.join(EXP_DIR, 'args.pkl'))
+#     res_path = os.path.join(EXP_DIR, 'results.csv')
+#     df = pd.read_csv(res_path)
+#     disease_conditions = ['Mock', 'Active SARS-CoV-2', 'UV Inactivated SARS-CoV-2', ]
+#
+#     for value in values:
+#     for condition in disease_conditions:
+#         populations[condition] = df[(df['plate'] == test_plate) & (df['disease_condition'] == condition) & (df['experiment'] == experiment)& (df['treatment'].isnull())& (df[parameter] == parameter_value)]
+#     for treatment in inspected_treatments:
+#         treatment_populations[treatment] = df[
+#             (df['plate'] == test_plate) & (df['treatment'] == treatment) & (df[parameter] == parameter_value)]
+#
+#     return populations, treatment_populations
+
+
+def load_populations(EXP_DIR, test_plate = 25, inspected_treatments=['Remdesivir (GS-5734)'], experiment='HRCE-1', parameter = 'cell_type', parameter_value='HRCE'):
+
+    args = load_pickle(os.path.join(EXP_DIR, 'args.pkl'))
+    res_path = os.path.join(EXP_DIR, 'results.csv')
+    df = pd.read_csv(res_path)
+    disease_conditions = ['Mock', 'Active SARS-CoV-2', 'UV Inactivated SARS-CoV-2', ]
+    populations={}
+    treatment_populations={}
+    for condition in disease_conditions:
+        populations[condition] = df[(df['plate'] == test_plate) & (df['disease_condition'] == condition) & (df['experiment'] == experiment)& (df['treatment'].isnull())& (df[parameter] == parameter_value)]
+    for treatment in inspected_treatments:
+        treatment_populations[treatment] = df[
+            (df['plate'] == test_plate) & (df['treatment'] == treatment) & (df[parameter] == parameter_value)]
+
+    # mocks = df[
+    #     (df['plate'] == test_plate) & (df['disease_condition'] == 'Mock') & (df['experiment'] == ('HRCE-' + str(1)))]
+    # active_no_treat = df[
+    #     (df['plate'] == test_plate) & (df['disease_condition'] == 'Active SARS-CoV-2') & (df['treatment'].isnull())]
+    # active_with_treat = df[
+    #     (df['plate'] == test_plate) & (df['disease_condition'] == 'Active SARS-CoV-2') & (~df['treatment'].isnull())]
+    # uv = df[(df['plate'] == test_plate) & (df['disease_condition'] == 'UV Inactivated SARS-CoV-2')]
+    # all_active = df[
+    #     (df['plate'] == test_plate) & (df['disease_condition'] == 'Active SARS-CoV-2')]
+    # remdesivir = df[
+    #     (df['plate'] == test_plate) & (df['disease_condition'] == 'Active SARS-CoV-2') & (df['treatment'] == inspected_treatment)]
+
+    return populations, treatment_populations
+
 
 if __name__ == '__main__':
 
-    exp_num = 3
-    channels_to_predict = [3]
+    exp_num = 4
+    channels_to_predict = [1, 2, 3, 4, 5]
+    fig_title = 'checking net minimize'
+    hyper_parameter = 'net_minimize'
+    hyper_parameter_values = [1,2,4,8]
+
+    inspected_treatments =[
+        'Remdesivir (GS-5734)',  # Exp 1, Plate 25
+        'GS-441524'  # Exp 1, Plates 25,26
+        # 'Aloxistatin',  # 1-25,26 2-27, DEEM-D paper
+        # 'Colchicine',  # 2-3,11,19, DEEM-D paper
+        # 'oxibendazole',  # 2-3,11,19
+        # 'Mebendazole'   #2-1,9,17
+    ]
+
     models = [
         Model_Config.UNET4TO1,
         # Model_Config.UNET1TO1,
@@ -28,103 +87,16 @@ if __name__ == '__main__':
         for target_channel in channels_to_predict:
 
             DATA_DIR, METADATA_PATH, _, IMAGES_PATH,EXP_DIR = config.get_paths(exp_num, model.name, target_channel)
+
+            save_dir = Path(EXP_DIR).parent
             args = load_pickle(os.path.join(EXP_DIR,'args.pkl'))
-            treatment = 'Remdesivir (GS-5734)'
-            res_path = os.path.join(EXP_DIR, 'results.csv')
-            df = pd.read_csv(res_path)
-            mocks = df[(df['plate'] == 25) & (df['disease_condition'] == 'Mock') & (df['experiment'] == ('HRCE-' + str(1)))]
-            active_no_treat = df[
-                (df['plate'] == 25) & (df['disease_condition'] == 'Active SARS-CoV-2') & (df['treatment'].isnull())]
-            active_with_treat = df[
-                (df['plate'] == 25) & (df['disease_condition'] == 'Active SARS-CoV-2') & (~df['treatment'].isnull())]
-            uv = df[(df['plate'] == 25) & (df['disease_condition'] == 'UV Inactivated SARS-CoV-2')]
-            all_active = df[
-                (df['plate'] == 25) & (df['disease_condition'] == 'Active SARS-CoV-2')]
-            remdesivir = df[
-                (df['plate'] == 25) & (df['disease_condition'] == 'Active SARS-CoV-2') & (df['treatment']==treatment)]
-            # main(args)
-            pccs = remdesivir.groupby('treatment_conc').mean()['pcc']
+
+            populations, treatment_populations = load_populations(EXP_DIR, parameter='minimize_net', value=value)
+            treatment_plot(populations, treatment_populations, save_dir, target_channel, unique_title= fig_title)
+            violin_plot(populations, treatment_populations, save_dir, target_channel, unique_title = fig_title)
+            # TODO : make treatment graph normalized to zero and compared to active and mock
+            # TODO : show treatment graph on exp 3 - compared to the other networks (1to1 and 5to5)
+            # TODO : Combine same sites (process image)
+            # TODO : show on exp 4 - different networks
 
 
-            lines = [
-                pccs,
-                [mocks['pcc'].mean()] * len(pccs.index),
-                [uv['pcc'].mean()] * len(pccs.index),
-                [active_no_treat['pcc'].mean()] * len(pccs.index),
-                [active_with_treat['pcc'].mean()] * len(pccs.index),
-                [all_active['pcc'].mean()] * len(pccs.index),
-            ]
-
-            labels = [
-                treatment,
-                'Mocks average',
-                'uv avg',
-                'Active w/o treat avg',
-                'Active w treat avg',
-                'Active all avg',
-            ]
-
-
-            fig = plt.figure()
-            fig_name = treatment + ' by dose on channel ' + str(target_channel)
-            for l in range(len(lines)):
-                plt.plot(pccs.index, lines[l], label=labels[l], linewidth=1.2)
-
-
-            plt.title(fig_name)
-            plt.xlabel('Dosage')
-            plt.ylabel('PCC')
-            plt.xscale('log')
-            plt.legend()
-            plt.show()
-            fig.savefig(os.path.join(EXP_DIR, fig_name+'.jpg'))
-            plt.close(fig)
-
-
-            violin_lines = [
-                mocks['pcc'],
-                uv['pcc'],
-                active_no_treat['pcc'],
-                active_with_treat['pcc'],
-                all_active['pcc'],
-                remdesivir['pcc']
-            ]
-
-            violin_labels = [
-                'Mocks' +'\n',
-                'UV' +'\n',
-                'Active w/o t' +'\n',
-                'Active w t' +'\n',
-                'Active all' +'\n',
-                'Remdesivir' + '\n'
-            ]
-            mocks_mean = mocks['pcc'].mean()
-            mocks_std = mocks['pcc'].std()
-            z_factors = [
-                0,
-                np.round(1 - 3 * (uv['pcc'].std() + mocks_std)/np.abs((uv['pcc'].mean() - mocks_mean)),3),
-                np.round(1 - 3 * (active_no_treat['pcc'].std() + mocks_std)/ np.abs((active_no_treat['pcc'].mean() - mocks_mean)), 3),
-                np.round(1 - 3 * (active_with_treat['pcc'].std() + mocks_std)/np.abs((active_with_treat['pcc'].mean() - mocks_mean)), 3),
-                np.round(1 - 3 * (all_active['pcc'].std() + mocks_std)/ np.abs((all_active['pcc'].mean() - mocks_mean)) ,3),
-                np.round(1 - 3 * (remdesivir['pcc'].std() + mocks_std)/ np.abs((remdesivir['pcc'].mean() - mocks_mean)),3)
-            ]
-
-            for l in range(len(violin_labels)):
-                # df['cluster3'] = ['\n'.join(wrap(x, 12)) for x in df['cluster3']
-                violin_labels[l] += 'z='+str(z_factors[l])
-
-            # plt.plot(pccs.index, [mocks['pcc'].mean()]*len(pccs.index), label='Mocks average')
-            # plt.plot(pccs.index, [active_no_treat.mean()['pcc']] * len(pccs.index), label='Active no treatment average')
-            # unique_conc = remdesivir['treatment_conc'].unique()
-            # pcc = remdesivir.groupby('treatment_conc').mean()['pcc']
-            fig = plt.figure()
-            title = 'PCC of populations on channel ' + str(target_channel)
-            plt.title(title)
-            plt.violinplot(violin_lines)
-            plt.xlabel('Population')
-            plt.ylim([0.75,1])
-            plt.ylabel('PCC')
-            plt.xticks([1, 2, 3, 4, 5, 6] ,labels = violin_labels)
-            plt.show()
-            fig.savefig(os.path.join(EXP_DIR, title + '.jpg'))
-            plt.close(fig)

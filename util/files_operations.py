@@ -150,7 +150,7 @@ def compress_folder_to_xz(dir_path):
     with tarfile.TarFile.xzopen(
             os.path.join(par_dir, dir_name + '.tar.xz'), 'w', preset=9
     ) as tar_xz:
-        for name in os.listdir('.'):
+        for name in os.listdir(''):
             tar_xz.add(name)
 
     os.chdir(prev_dir)

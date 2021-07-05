@@ -7,7 +7,7 @@ from torch.utils.data import Dataset
 import numpy as np
 from configuration import config
 
-from visuals.util import show_input_and_target
+from visuals.visualize import show_input_and_target
 
 use_cuda = torch.cuda.is_available()
 print("USE CUDA=" + str(use_cuda))
