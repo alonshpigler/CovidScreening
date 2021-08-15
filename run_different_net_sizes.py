@@ -9,14 +9,15 @@ else:
     channels_to_predict = [1, 2, 3, 4, 5]
 
 
-exp_num = 5  # if None, new experiment directory is created with the next avaialible number
+exp_num = 6  # if None, new experiment directory is created with the next avaialible number
 mode = 'train'
 DEBUG = False
 
 models = [
     # Model_Config.UNET1TO1,
-    Model_Config.UNET4TO1,
-    # Model_Config.UNET5TO5
+    # Model_Config.UNET4TO1,
+    # Model_Config.UNET5TO5,
+    Model_Config.AUTO4T01
 ]
 
 net_minimizations = [1,2,4,8]

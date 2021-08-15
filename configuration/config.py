@@ -6,7 +6,7 @@ import random
 import torch
 import numpy as np
 from pathlib import Path
-
+from data_layer.dataset import CovidSupervisedDataset, CovidDataset
 from util.files_operations import make_folder
 
 print('__Python VERSION:', sys.version)
@@ -26,13 +26,13 @@ LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
 Tensor = FloatTensor
 
 
-def parse_args(exp_num=None, num_input_channels=4, target_channel=1, model_type='UNET4TO1', debug=False):
+def parse_args(exp_num=None, num_input_channels=4, target_channel=1, model_type='UNET4TO1', debug=False, supervised=False):
 
     parser = ArgumentParser()
-    parser.add_argument('-m','--mode', type = str,  choices=('train', 'val', 'predict'))
+    # parser.add_argument('-m','--mode', type = str,  choices=('train', 'val', 'predict'))
     DATA_DIR, METADATA_PATH, LOG_DIR, IMAGES_PATH, EXP_DIR = get_paths(exp_num, model_type, target_channel)
 
-    parser.add_argument('--data_path', type=Path, default=os.path.join(DATA_DIR,'images\\'),
+    parser.add_argument('--data_path', type=Path, default=DATA_DIR,
                         help='path to the data root. It assumes format like in Kaggle with unpacked archives')
 
     parser.add_argument('--metadata_path', type=Path, default=METADATA_PATH,
@@ -41,6 +41,11 @@ def parse_args(exp_num=None, num_input_channels=4, target_channel=1, model_type=
                         help='path to experiment logs.')
     parser.add_argument('--exp_dir', type=Path, default=EXP_DIR,
                         help='path to experiment results.')
+    parser.add_argument('--supervised', type=bool, default=supervised,
+                        help = 'bool indicating if model is trained supervised or unsupervised')
+    dataset = CovidDataset if not supervised else CovidSupervisedDataset
+    parser.add_argument('--dataset', default=dataset,choices=(CovidDataset,CovidSupervisedDataset),
+                        help='dataset class')
     parser.add_argument('--plates_split', type=list, default=[[1, 2, 3, 4, 5], [25]],
                         help='plates split between train and test. left is train and right is test')
     parser.add_argument('--test_samples_per_plate', type=int, default=-1,
@@ -78,6 +83,7 @@ def parse_args(exp_num=None, num_input_channels=4, target_channel=1, model_type=
                         default='lightning_logs/version_66/checkpoints/epoch=18-step=113.ckpt',
                         help='path to load existing model from')
 
+
     # args = parser.parse_known_args()
     args = parser.parse_known_args()[0]
     # args.model_args = {'lr': args.lr, 'n_classes': n_classes, 'input_size': args.input_size,'minimize_net_factor': args.minimize_net_factor}
@@ -114,8 +120,8 @@ def get_paths(exp_num=None, model_type = 'UNET4TO1', target_channel=1):
     EXP_DIR = f"{ROOT_DIR}/exp_dir"
     # if exp_num is None:
     #     exp_num = get_exp_num(EXP_DIR)
-    # EXP_DIR = os.path.join(EXP_DIR, str(exp_num),model_type, "channel " + str(target_channel))
-    EXP_DIR = os.path.join(EXP_DIR, str(exp_num), "channel " + str(target_channel))
+    EXP_DIR = os.path.join(EXP_DIR, str(exp_num),model_type, "channel " + str(target_channel))
+    # EXP_DIR = os.path.join(EXP_DIR, str(exp_num), "channel " + str(target_channel))
     # exp_num = get_exp_num(EXP_DIR)
     if exp_num is not None:
         make_folder(EXP_DIR)

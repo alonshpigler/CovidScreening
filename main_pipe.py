@@ -56,7 +56,9 @@ def test(model, data_loader, input_size, input_channels=4, title ='', save_dir='
 
     return results
 
-def save_results(res, args,kwargs):
+
+def save_results(res, args,kwargs={}):
+
     for arg in kwargs:
         res[arg] = kwargs[arg]
 
@@ -65,8 +67,8 @@ def save_results(res, args,kwargs):
         prev_res = pd.read_csv(res_dir)
         res = pd.concat([prev_res, res])
 
-    save_to_pickle(res, os.path.join(args.exp_dir, 'results' + kwargs.__str__() + '.pkl'))
-    save_to_pickle(args, os.path.join(args.exp_dir, 'args' + kwargs.__str__() + '.pkl'))
+    # save_to_pickle(res, os.path.join(args.exp_dir, 'results.pkl'))
+    save_to_pickle(args, os.path.join(args.exp_dir, 'args.pkl'))
     res.to_csv(res_dir)
 
 

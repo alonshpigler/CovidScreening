@@ -89,6 +89,17 @@ class CenterCrop(object):
         return image
 
 
+class Resize(object):
+
+    def __init__(self, size):
+        self.size = size
+
+    def __call__(self, image):
+        image = F.resize(image, self.size)
+        # target = F.resize(target, size, interpolation=Image.NEAREST)
+        return image
+
+
 class ToTensor(object):
     def __call__(self, image):
         image = F.to_tensor(image)

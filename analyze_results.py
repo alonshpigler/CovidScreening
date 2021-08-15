@@ -2,11 +2,12 @@ from pathlib import Path
 
 import os
 import pandas as pd
+import matplotlib.pyplot as plt
 from configuration import config
 
 from configuration.model_config import Model_Config
 from util.files_operations import load_pickle
-from visualize import violin_plot, treatment_plot
+from visuals.visualize import violin_plot, treatment_plot
 
 
 def analyze_results(res):
@@ -32,9 +33,8 @@ def analyze_results(res):
 #     return populations, treatment_populations
 
 
-def load_populations(EXP_DIR, test_plate = 25, inspected_treatments=['Remdesivir (GS-5734)'], experiment='HRCE-1', parameter = 'cell_type', parameter_value='HRCE'):
+def load_populations(EXP_DIR, inspected_treatments=['Remdesivir (GS-5734)'],test_plate = 25, experiment='HRCE-1', parameter = 'cell_type', parameter_value='HRCE'):
 
-    args = load_pickle(os.path.join(EXP_DIR, 'args.pkl'))
     res_path = os.path.join(EXP_DIR, 'results.csv')
     df = pd.read_csv(res_path)
     disease_conditions = ['Mock', 'Active SARS-CoV-2', 'UV Inactivated SARS-CoV-2', ]
@@ -63,7 +63,7 @@ def load_populations(EXP_DIR, test_plate = 25, inspected_treatments=['Remdesivir
 
 if __name__ == '__main__':
 
-    exp_num = 4
+    exp_num = 5
     channels_to_predict = [1, 2, 3, 4, 5]
     fig_title = 'checking net minimize'
     hyper_parameter = 'net_minimize'
@@ -83,20 +83,31 @@ if __name__ == '__main__':
         # Model_Config.UNET1TO1,
         # Model_Config.UNET5TO5
     ]
+
     for model in models:
         for target_channel in channels_to_predict:
+            z_factors=[]
+            for value in hyper_parameter_values:
+                DATA_DIR, METADATA_PATH, _, IMAGES_PATH,EXP_DIR = config.get_paths(exp_num, model.name, target_channel)
 
-            DATA_DIR, METADATA_PATH, _, IMAGES_PATH,EXP_DIR = config.get_paths(exp_num, model.name, target_channel)
+                save_dir = Path(EXP_DIR).parent
+                # args = load_pickle(os.path.join(EXP_DIR,'args.pkl'))
 
-            save_dir = Path(EXP_DIR).parent
-            args = load_pickle(os.path.join(EXP_DIR,'args.pkl'))
-
-            populations, treatment_populations = load_populations(EXP_DIR, parameter='minimize_net', value=value)
-            treatment_plot(populations, treatment_populations, save_dir, target_channel, unique_title= fig_title)
-            violin_plot(populations, treatment_populations, save_dir, target_channel, unique_title = fig_title)
-            # TODO : make treatment graph normalized to zero and compared to active and mock
-            # TODO : show treatment graph on exp 3 - compared to the other networks (1to1 and 5to5)
-            # TODO : Combine same sites (process image)
-            # TODO : show on exp 4 - different networks
+                populations, treatment_populations = load_populations(EXP_DIR,inspected_treatments,parameter=hyper_parameter,parameter_value=value)
+                this_fig = fig_title
+                this_fig += str(value)
+                # populations, treatment_populations = load_populations(EXP_DIR, parameter='minimize_net', value=value)
+                treatment_plot(populations, treatment_populations, save_dir, target_channel, unique_title=this_fig)
+                z_factor = violin_plot(populations, treatment_populations, save_dir, target_channel, unique_title = this_fig)
+                z_factors.append(z_factor)
+            plt.plot(hyper_parameter_values, z_factors,  linewidth = 1.2)
+            plt.title('Channel'+str(target_channel))
+            plt.xlabel('net minimization factor')
+            plt.ylabel('z_factor')
+            plt.show()
+                # TODO : make treatment graph normalized to zero and compared to active and mock
+                # TODO : show treatment graph on exp 3 - compared to the other networks (1to1 and 5to5)
+                # TODO : Combine same sites (process image)
+                # TODO : show on exp 4 - different networks
 
 
